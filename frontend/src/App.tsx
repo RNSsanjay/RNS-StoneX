@@ -4,7 +4,6 @@ import GameModeSelection from './components/GameModeSelection';
 import SinglePlayerGame from './components/SinglePlayerGame';
 import MultiplayerGame from './components/MultiplayerGame';
 import './App.css';
-0
 function App() {
   return (
     <Router>
