@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 from datetime import datetime
-from enum import Enum
 
 class GameMove(BaseModel):
     move: str  # "rock", "paper", "scissors"

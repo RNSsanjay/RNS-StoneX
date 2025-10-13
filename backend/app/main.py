@@ -7,9 +7,9 @@ import uuid
 import random
 from datetime import datetime
 
-from .app.models import GameState, Player, GameMove, GameResult
-from .app.ai_agent import AIAgent
-from .app.game_logic import GameLogic
+from .models import GameState, Player, GameMove, GameResult
+from .ai_agent import AIAgent
+from .game_logic import GameLogic
 
 app = FastAPI(
     title="RNS StoneX API",
