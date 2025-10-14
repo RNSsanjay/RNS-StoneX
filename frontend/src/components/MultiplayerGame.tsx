@@ -20,6 +20,27 @@ const MultiplayerGame = () => {
   const [showResult, setShowResult] = useState(false);
   const [gameHistory, setGameHistory] = useState<any[]>([]);
 
+  // Camera initialization
+  useEffect(() => {
+    const initializeCameras = async () => {
+      try {
+        // Request camera permission
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop()); // Stop the test stream
+        
+        // Enumerate available cameras
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        console.log('Cameras initialized:', videoDevices.length, 'available');
+      } catch (error) {
+        console.error('Error initializing cameras:', error);
+      }
+    };
+
+    initializeCameras();
+  }, []);
+
   const videoConstraints = {
     width: 320,
     height: 240,
@@ -44,10 +65,9 @@ const MultiplayerGame = () => {
     // Give players time to make gestures
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // For demo purposes, use random moves
-    const moves = ['rock', 'paper', 'scissors'];
-    const p1Move = moves[Math.floor(Math.random() * moves.length)];
-    const p2Move = moves[Math.floor(Math.random() * moves.length)];
+    // Capture gestures from both cameras
+    const p1Move = await captureGestureFromCamera(webcam1Ref.current, 'player1');
+    const p2Move = await captureGestureFromCamera(webcam2Ref.current, 'player2');
     
     setPlayer1Move(p1Move);
     setPlayer2Move(p2Move);
@@ -87,6 +107,64 @@ const MultiplayerGame = () => {
     };
     
     return winningCombos[move1 as keyof typeof winningCombos] === move2 ? 'player1' : 'player2';
+  };
+
+  const captureGestureFromCamera = async (webcamRef: any, player: string): Promise<string> => {
+    if (!webcamRef) {
+      console.error(`${player}: Webcam ref is null`);
+      return 'none';
+    }
+
+    if (!webcamRef.getScreenshot) {
+      console.error(`${player}: Webcam ref does not have getScreenshot method`);
+      return 'none';
+    }
+
+    try {
+      console.log(`${player}: Attempting to capture screenshot...`);
+      const imageSrc = webcamRef.getScreenshot();
+      console.log(`${player}: Screenshot captured, length:`, imageSrc ? imageSrc.length : 'null');
+      
+      if (!imageSrc) {
+        console.error(`${player}: Screenshot is null or empty`);
+        return 'none';
+      }
+
+      console.log(`${player}: Sending image to backend API...`);
+      // Send image to backend for gesture recognition
+      const response = await fetch('http://localhost:8000/api/gesture/recognize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: imageSrc
+        })
+      });
+
+      console.log(`${player}: API response status:`, response.status);
+
+      if (!response.ok) {
+        console.error(`${player}: Gesture recognition API error:`, response.status);
+        const errorText = await response.text();
+        console.error(`${player}: Error response:`, errorText);
+        return 'none';
+      }
+
+      const result = await response.json();
+      console.log(`${player}: API result:`, result);
+      
+      if (result.detected && result.confidence > 0.6) {
+        console.log(`${player}: Gesture detected: ${result.gesture} (${result.confidence})`);
+        return result.gesture;
+      } else {
+        console.log(`${player}: Gesture not detected clearly (confidence: ${result.confidence})`);
+        return 'none';
+      }
+    } catch (error) {
+      console.error(`${player}: Error capturing gesture:`, error);
+      return 'none';
+    }
   };
 
   const getMoveIcon = (move: string) => {

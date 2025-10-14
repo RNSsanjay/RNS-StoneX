@@ -4,13 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
 import { 
   ArrowLeft, 
-  Camera, 
-  Play, 
   RotateCcw, 
   Trophy,
-  Zap,
-  Eye,
-  Hand
+  Zap
 } from 'lucide-react';
 import { useGameState } from '../hooks/useGameState';
 import { useWebcamGesture } from '../hooks/useWebcamGesture';
@@ -27,6 +23,12 @@ const SinglePlayerGame = () => {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [aiAnimation, setAiAnimation] = useState<string>('idle');
+  const [gameStarted, setGameStarted] = useState(false);
+  const [totalRounds, setTotalRounds] = useState(3);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [playerScore, setPlayerScore] = useState(0);
+  const [aiScore, setAiScore] = useState(0);
+  const [gameFinished, setGameFinished] = useState(false);
   
   const onGestureDetected = useCallback((gesture: HandGesture) => {
     if (isPlaying && gesture.confidence > 0.7) {
@@ -42,12 +44,14 @@ const SinglePlayerGame = () => {
     startDetection, 
     stopDetection, 
     captureGesture 
-  } = useWebcamGesture({ onGestureDetected, confidenceThreshold: 0.7 });
+  } = useWebcamGesture({ onGestureDetected, confidenceThreshold: 0.6 });
 
-  // Initialize game on component mount
+  // Auto-start first round when game starts
   useEffect(() => {
-    createGame();
-  }, [createGame]);
+    if (gameStarted && !gameFinished && currentRound === 1 && !isPlaying && !showResult) {
+      handleStartRound();
+    }
+  }, [gameStarted, gameFinished, currentRound, isPlaying, showResult]);
 
   const handleStartRound = async () => {
     setIsPlaying(true);
@@ -86,35 +90,57 @@ const SinglePlayerGame = () => {
     }
     
     setPlayerMove(move);
-    setAiAnimation('deciding');
     
-    try {
-      const gameMove: GameMove = {
-        move: move as 'rock' | 'paper' | 'scissors'
-      };
+    // Show result immediately with player move
+    setShowResult(true);
+    
+    // Start AI processing after result is shown
+    setTimeout(async () => {
+      setAiAnimation('deciding');
       
-      const result = await makeMove(gameMove);
-      
-      if (result) {
-        setAiMove(result.ai_move || 'rock');
-        setRoundResult(result.result);
+      try {
+        const gameMove: GameMove = {
+          move: move as 'rock' | 'paper' | 'scissors'
+        };
         
-        // Set AI animation based on result
-        if (result.result === 'player2') {
-          setAiAnimation('victory');
-        } else if (result.result === 'player1') {
-          setAiAnimation('defeat');
-        } else {
-          setAiAnimation('neutral');
+        const result = await makeMove(gameMove);
+        
+        if (result) {
+          setAiMove(result.ai_move || 'rock');
+          setRoundResult(result.result);
+          
+          // Update scores
+          if (result.result === 'player1') {
+            setPlayerScore(prev => prev + 1);
+          } else if (result.result === 'player2') {
+            setAiScore(prev => prev + 1);
+          }
+          
+          // Set AI animation based on result
+          if (result.result === 'player2') {
+            setAiAnimation('victory');
+          } else if (result.result === 'player1') {
+            setAiAnimation('defeat');
+          } else {
+            setAiAnimation('neutral');
+          }
+          
+          // Auto-start next round after additional delay for full result experience, or finish game
+          setTimeout(() => {
+            if (currentRound >= totalRounds) {
+              setGameFinished(true);
+            } else {
+              setCurrentRound(prev => prev + 1);
+              handleStartRound();
+            }
+          }, 4000); // Additional 4 seconds after AI reveals move
         }
-        
-        setShowResult(true);
+      } catch (error) {
+        console.error('Error making move:', error);
+      } finally {
+        setIsPlaying(false);
       }
-    } catch (error) {
-      console.error('Error making move:', error);
-    } finally {
-      setIsPlaying(false);
-    }
+    }, 1000); // 1 second delay before AI starts analyzing
   };
 
   const handleManualMove = (move: string) => {
@@ -131,6 +157,11 @@ const SinglePlayerGame = () => {
     setRoundResult(null);
     setShowResult(false);
     setAiAnimation('idle');
+    setGameStarted(false);
+    setCurrentRound(1);
+    setPlayerScore(0);
+    setAiScore(0);
+    setGameFinished(false);
   };
 
   const getMoveIcon = (move: string) => {
@@ -147,7 +178,9 @@ const SinglePlayerGame = () => {
   };
 
   const getResultMessage = () => {
-    if (!roundResult) return '';
+    if (!roundResult) {
+      return aiAnimation === 'deciding' ? 'AI is analyzing...' : 'Waiting for AI...';
+    }
     
     switch (roundResult) {
       case 'player1':
@@ -162,6 +195,8 @@ const SinglePlayerGame = () => {
   };
 
   const getResultColor = () => {
+    if (!roundResult) return 'text-blue-600'; // Thinking color
+    
     switch (roundResult) {
       case 'player1':
         return 'text-green-600';
@@ -176,33 +211,131 @@ const SinglePlayerGame = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <motion.button
-          onClick={() => navigate('/modes')}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex items-center gap-2 px-4 py-2 text-amber-700 hover:text-amber-800 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Modes
-        </motion.button>
-        
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-amber-800 font-orbitron">Battle Arena</h1>
-          <p className="text-amber-600">Player vs RoboStone AI</p>
-        </div>
-        
-        <motion.button
-          onClick={handleResetGame}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-200 text-amber-800 rounded-lg hover:bg-amber-300 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" />
-          Reset
-        </motion.button>
-      </div>
+      <AnimatePresence mode="wait">
+        {!gameStarted ? (
+          // Rounds Selection Screen
+          <motion.div
+            key="rounds-selection"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="flex flex-col items-center justify-center min-h-screen"
+          >
+            {/* Back Button */}
+            <motion.button
+              onClick={() => navigate('/modes')}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="absolute top-8 left-8 flex items-center gap-2 px-4 py-2 text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back
+            </motion.button>
+
+            {/* Title */}
+            <motion.h1
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-4xl md:text-6xl font-bold text-amber-800 mb-8 text-center font-orbitron"
+            >
+              Choose Rounds
+            </motion.h1>
+
+            {/* Rounds Selection */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-2xl border border-amber-200 max-w-md w-full"
+            >
+              <h2 className="text-2xl font-bold text-amber-800 mb-6 text-center">How many rounds?</h2>
+
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                {[3, 5, 7, 10].map((rounds) => (
+                  <motion.button
+                    key={rounds}
+                    onClick={() => setTotalRounds(rounds)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`p-4 rounded-xl font-bold text-lg transition-all ${
+                      totalRounds === rounds
+                        ? 'bg-amber-500 text-white shadow-lg'
+                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                    }`}
+                  >
+                    {rounds} Rounds
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Custom Rounds Input */}
+              <div className="mb-8">
+                <label className="block text-sm font-medium text-amber-700 mb-2 text-center">
+                  Or enter custom rounds:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={totalRounds}
+                  onChange={(e) => setTotalRounds(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                  className="w-full px-4 py-2 text-center text-xl font-bold border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                />
+              </div>
+
+              {/* Start Game Button */}
+              <motion.button
+                onClick={() => setGameStarted(true)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl transition-all"
+              >
+                Start {totalRounds} Round Battle!
+              </motion.button>
+
+              <p className="text-xs text-amber-600 mt-4 text-center">
+                First to win {Math.ceil(totalRounds / 2)} rounds becomes champion!
+              </p>
+            </motion.div>
+          </motion.div>
+        ) : (
+          // Game Screen
+          <motion.div
+            key="game-screen"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="w-full"
+          >
+            {/* Existing game content goes here */}
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <motion.button
+                onClick={() => setGameStarted(false)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-2 px-4 py-2 text-amber-700 hover:text-amber-800 transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Change Rounds
+              </motion.button>
+
+              <div className="text-center">
+                <h1 className="text-3xl font-bold text-amber-800 font-orbitron">Battle Arena</h1>
+                <p className="text-amber-600">Round {currentRound} of {totalRounds} | You: {playerScore} - AI: {aiScore}</p>
+              </div>
+
+              <motion.button
+                onClick={handleResetGame}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-200 text-amber-800 rounded-lg hover:bg-amber-300 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset
+              </motion.button>
+            </div>
 
       {/* Score Display */}
       <div className="flex justify-center mb-8">
@@ -265,9 +398,13 @@ const SinglePlayerGame = () => {
             </div>
             
             {/* Gesture Feedback */}
-            {lastGesture && lastGesture.detected && (
-              <div className="absolute bottom-2 left-2 bg-black/70 text-white px-3 py-1 rounded-lg text-sm">
+            {lastGesture && lastGesture.detected ? (
+              <div className="absolute bottom-2 left-2 bg-green-600/90 text-white px-3 py-1 rounded-lg text-sm">
                 {lastGesture.gesture} ({Math.round(lastGesture.confidence * 100)}%)
+              </div>
+            ) : (
+              <div className="absolute bottom-2 left-2 bg-yellow-600/90 text-white px-3 py-1 rounded-lg text-sm">
+                Show hand gesture
               </div>
             )}
           </div>
@@ -393,7 +530,7 @@ const SinglePlayerGame = () => {
 
       {/* Result Display */}
       <AnimatePresence>
-        {showResult && roundResult && (
+        {showResult && (
           <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -421,48 +558,47 @@ const SinglePlayerGame = () => {
         )}
       </AnimatePresence>
 
-      {/* Control Buttons */}
-      <div className="fixed bottom-8 right-8 flex flex-col gap-4">
-        <motion.button
-          onClick={handleStartRound}
-          disabled={isPlaying || loading}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isPlaying ? (
-            <>
-              <Eye className="w-5 h-5 animate-pulse" />
-              Playing...
-            </>
-          ) : (
-            <>
-              <Play className="w-5 h-5" />
-              Start Round
-            </>
-          )}
-        </motion.button>
-        
-        <motion.button
-          onClick={() => {
-            if (isDetecting) {
-              stopDetection();
-            } else {
-              startDetection();
-            }
-          }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg ${
-            isDetecting 
-              ? 'bg-red-500 text-white' 
-              : 'bg-blue-500 text-white'
-          }`}
-        >
-          <Camera className="w-5 h-5" />
-          {isDetecting ? 'Stop Detection' : 'Start Detection'}
-        </motion.button>
-      </div>
+      {/* Game Finished Screen */}
+      <AnimatePresence>
+        {gameFinished && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          >
+            <motion.div
+              animate={{ 
+                scale: [1, 1.1, 1],
+                rotate: [0, 2, -2, 0]
+              }}
+              transition={{ repeat: Infinity, duration: 2 }}
+              className="bg-white rounded-2xl p-8 text-center shadow-2xl max-w-md"
+            >
+              <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+              <h2 className="text-3xl font-bold text-amber-800 mb-4">
+                🎉 Game Complete! 🎉
+              </h2>
+              <p className="text-xl text-amber-700 mb-6">
+                {playerScore > aiScore ? 'You Win!' : playerScore < aiScore ? 'AI Wins!' : 'It\'s a Tie!'}
+              </p>
+              <p className="text-amber-600 mb-6">
+                Final Score: {playerScore} - {aiScore}
+              </p>
+              <motion.button
+                onClick={handleResetGame}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-full font-bold"
+              >
+                Play Again
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+        )}
+    </AnimatePresence>
     </div>
   );
 };

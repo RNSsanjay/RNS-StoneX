@@ -18,7 +18,7 @@ export const useWebcamGesture = ({
   const [lastGesture, setLastGesture] = useState<HandGesture | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Mock gesture detection for now (will be replaced with actual MediaPipe integration)
+  // Proper gesture detection using backend API
   const detectGesture = useCallback(async (): Promise<HandGesture> => {
     if (!webcamRef.current || !webcamRef.current.getScreenshot) {
       return {
@@ -39,19 +39,37 @@ export const useWebcamGesture = ({
         };
       }
 
-      // For now, return a mock gesture
-      // TODO: Implement actual gesture recognition API call
-      const mockGestures: ('rock' | 'paper' | 'scissors' | 'none')[] = ['rock', 'paper', 'scissors', 'none'];
-      const randomGesture = mockGestures[Math.floor(Math.random() * mockGestures.length)];
-      const confidence = randomGesture === 'none' ? 0 : Math.random() * 0.5 + 0.5;
+      // Send image to backend for gesture recognition
+      const response = await fetch('http://localhost:8000/api/gesture/recognize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: imageSrc
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Gesture recognition API error:', response.status);
+        return {
+          gesture: 'none',
+          confidence: 0,
+          detected: false
+        };
+      }
+
+      const result = await response.json();
 
       return {
-        gesture: randomGesture,
-        confidence,
-        detected: randomGesture !== 'none'
+        gesture: result.gesture as 'rock' | 'paper' | 'scissors' | 'none',
+        confidence: result.confidence || 0,
+        detected: result.detected || false,
+        landmarks: result.landmarks || []
       };
-    } catch (err) {
-      console.error('Gesture detection error:', err);
+
+    } catch (error) {
+      console.error('Gesture detection error:', error);
       return {
         gesture: 'none',
         confidence: 0,

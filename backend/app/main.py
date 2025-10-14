@@ -10,6 +10,7 @@ from datetime import datetime
 from .models import GameState, Player, GameMove, GameResult
 from .ai_agent import AIAgent
 from .game_logic import GameLogic
+from .gesture_recognition import HandGestureRecognizer
 
 app = FastAPI(
     title="RNS StoneX API",
@@ -30,6 +31,7 @@ app.add_middleware(
 active_games: Dict[str, GameState] = {}
 ai_agent = AIAgent()
 game_logic = GameLogic()
+gesture_recognizer = HandGestureRecognizer()
 
 class ConnectionManager:
     def __init__(self):
@@ -115,23 +117,45 @@ async def make_move(game_id: str, move: GameMove):
 @app.post("/api/ai/get-move")
 async def get_ai_move(history: Optional[List] = None):
     """Get AI move based on game history"""
-    move = await ai_agent.make_move(history=history or [])
+    # Extract last opponent move from history if available
+    opponent_last_move = None
+    if history and len(history) > 0:
+        opponent_last_move = history[-1].get("player1_move")
+    
+    move = await ai_agent.make_move(opponent_last_move, history or [])
     return {"move": move, "animation": ai_agent.get_animation_data()}
 
 @app.post("/api/gesture/recognize")
 async def recognize_gesture(image_data: dict):
-    """Recognize gesture from image data (simplified for now)"""
-    # For now, return a mock response
-    # Later we'll integrate MediaPipe when dependencies are installed
-    mock_gestures = ["rock", "paper", "scissors"]
-    detected_gesture = random.choice(mock_gestures)
-    
-    return {
-        "gesture": detected_gesture,
-        "confidence": 0.85,
-        "detected": True,
-        "message": f"Detected {detected_gesture} with high confidence"
-    }
+    """Recognize gesture from image data using MediaPipe"""
+    try:
+        image_base64 = image_data.get("image")
+        if not image_base64:
+            return {
+                "gesture": "none",
+                "confidence": 0.0,
+                "detected": False,
+                "error": "No image data provided"
+            }
+        
+        # Use the actual gesture recognizer
+        result = gesture_recognizer.recognize_gesture(image_base64)
+        
+        return {
+            "gesture": result["gesture"],
+            "confidence": result["confidence"],
+            "detected": result["detected"],
+            "landmarks": result.get("landmarks", []),
+            "message": f"Detected {result['gesture']} with {result['confidence']:.2f} confidence"
+        }
+        
+    except Exception as e:
+        return {
+            "gesture": "error",
+            "confidence": 0.0,
+            "detected": False,
+            "error": str(e)
+        }
 
 @app.get("/api/health")
 async def health_check():

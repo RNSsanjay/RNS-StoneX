@@ -17,109 +17,133 @@ class AIAgent:
         self.current_mood = "neutral"
         
     async def make_move(self, opponent_last_move: Optional[str] = None, game_history: List[Dict] = None) -> str:
-        """Generate AI move using Gemini 2.0 Flash with game strategy"""
-        
-        # Prepare game context
-        context = self._prepare_game_context(opponent_last_move, game_history or [])
-        
-        system_prompt = """You are RoboStone, an advanced AI opponent in a Rock Paper Scissors game. 
-        You should be strategic, unpredictable, and engaging. Analyze the opponent's patterns and make intelligent moves.
-        
-        Respond with ONLY one of these exact words: rock, paper, or scissors
-        
-        Consider:
-        - Opponent's previous moves and patterns
-        - Counter-strategies and psychology
-        - Maintaining unpredictability
-        - Being competitive but fair
-        """
-        
-        human_prompt = f"""
-        Game Context: {context}
-        
-        Based on the opponent's history and patterns, what's your next move?
-        Remember: rock beats scissors, scissors beats paper, paper beats rock.
-        
-        Respond with only: rock, paper, or scissors
-        """
-        
+        """Generate AI move using optimized strategic logic"""
         try:
-            # For now, use strategic logic instead of LLM
-            # TODO: Integrate Gemini 2.0 Flash when network is stable
+            # Use enhanced strategic logic (much faster than LLM calls)
             ai_move = self._strategic_move(opponent_last_move, game_history or [])
-            
+
+            # Update mood based on move
             self._update_mood(ai_move, opponent_last_move)
+
             return ai_move
-            
+
         except Exception as e:
             print(f"AI Agent error: {e}")
-            # Fallback to strategic random
+            # Fast fallback
             return self._fallback_strategy(opponent_last_move, game_history or [])
     
     def _prepare_game_context(self, opponent_last_move: Optional[str], game_history: List[Dict]) -> str:
-        """Prepare context for AI decision making"""
+        """Prepare optimized context for AI decision making (kept for future LLM integration)"""
         if not game_history:
-            return "This is the first round. No previous moves to analyze."
-        
-        # Analyze patterns
-        opponent_moves = [round_data.get("player1_move", "") for round_data in game_history[-5:]]
-        move_counts = {"rock": 0, "paper": 0, "scissors": 0}
-        
-        for move in opponent_moves:
-            if move in move_counts:
-                move_counts[move] += 1
-        
-        context = f"""
-        Recent opponent moves: {opponent_moves}
-        Move frequency: {move_counts}
-        Last opponent move: {opponent_last_move or 'None'}
-        Total rounds played: {len(game_history)}
-        """
-        
-        return context
+            return "First round - no history"
+
+        # Fast analysis of last 5 moves
+        recent_moves = [round_data.get("player1_move", "") for round_data in game_history[-5:]]
+        valid_moves = [m for m in recent_moves if m in ["rock", "paper", "scissors"]]
+
+        if not valid_moves:
+            return f"Last move: {opponent_last_move or 'none'}"
+
+        # Quick frequency count
+        counts = {"rock": valid_moves.count("rock"),
+                 "paper": valid_moves.count("paper"),
+                 "scissors": valid_moves.count("scissors")}
+
+        return f"Moves: {valid_moves}, Counts: {counts}, Last: {opponent_last_move or 'none'}"
     
     def _strategic_move(self, opponent_last_move: Optional[str], game_history: List[Dict]) -> str:
-        """Strategic AI move based on game analysis"""
+        """Enhanced strategic AI move with improved pattern recognition and faster execution"""
         if not game_history:
             return random.choice(["rock", "paper", "scissors"])
-        
-        # Analyze opponent patterns
-        recent_moves = [round_data.get("player1_move", "") for round_data in game_history[-5:]]
+
+        # Fast analysis of recent moves (last 7 rounds for better pattern detection)
+        recent_moves = [round_data.get("player1_move", "") for round_data in game_history[-7:]]
+        valid_moves = [move for move in recent_moves if move in ["rock", "paper", "scissors"]]
+
+        if not valid_moves:
+            return random.choice(["rock", "paper", "scissors"])
+
+        # Calculate move frequencies and transitions
         move_counts = {"rock": 0, "paper": 0, "scissors": 0}
-        
-        for move in recent_moves:
-            if move in move_counts:
-                move_counts[move] += 1
-        
-        # Predict opponent's next move and counter it
-        if move_counts:
+        transitions = {"rock": {"rock": 0, "paper": 0, "scissors": 0},
+                      "paper": {"rock": 0, "paper": 0, "scissors": 0},
+                      "scissors": {"rock": 0, "paper": 0, "scissors": 0}}
+
+        prev_move = None
+        for move in valid_moves:
+            move_counts[move] += 1
+            if prev_move:
+                transitions[prev_move][move] += 1
+            prev_move = move
+
+        # Predict opponent's next move using multiple strategies
+        predicted_moves = []
+
+        # Strategy 1: Counter most frequent move (40% weight)
+        if max(move_counts.values()) > 0:
             most_common = max(move_counts, key=move_counts.get)
-            counters = {
-                "rock": "paper",
-                "paper": "scissors", 
-                "scissors": "rock"
-            }
-            
-            # 60% strategic, 40% random for unpredictability
-            if random.random() < 0.6:
-                return counters.get(most_common, random.choice(["rock", "paper", "scissors"]))
-        
-        return random.choice(["rock", "paper", "scissors"])
+            counters = {"rock": "paper", "paper": "scissors", "scissors": "rock"}
+            predicted_moves.extend([counters[most_common]] * 4)
+
+        # Strategy 2: Markov chain prediction (30% weight)
+        if prev_move and sum(transitions[prev_move].values()) > 0:
+            next_move = max(transitions[prev_move], key=transitions[prev_move].get)
+            predicted_moves.extend([next_move] * 3)
+
+        # Strategy 3: Counter last move (20% weight)
+        if opponent_last_move:
+            counters = {"rock": "paper", "paper": "scissors", "scissors": "rock"}
+            predicted_moves.extend([counters[opponent_last_move]] * 2)
+
+        # Strategy 4: Random for unpredictability (10% weight)
+        predicted_moves.extend(random.choices(["rock", "paper", "scissors"], k=1))
+
+        # Choose the most predicted move
+        if predicted_moves:
+            ai_move = max(set(predicted_moves), key=predicted_moves.count)
+        else:
+            ai_move = random.choice(["rock", "paper", "scissors"])
+
+        # Add some randomness to prevent being too predictable (15% chance)
+        if random.random() < 0.15:
+            ai_move = random.choice(["rock", "paper", "scissors"])
+
+        return ai_move
     
     def _fallback_strategy(self, opponent_last_move: Optional[str], game_history: List[Dict]) -> str:
-        """Strategic fallback when AI model fails"""
+        """Enhanced fallback strategy with better counter-play"""
         if not opponent_last_move:
             return random.choice(["rock", "paper", "scissors"])
-        
-        # Simple counter-strategy
+
+        # Analyze recent history for fallback
+        if game_history:
+            recent_opponent_moves = [round_data.get("player1_move", "") for round_data in game_history[-3:]]
+            recent_ai_moves = [round_data.get("player2_move", "") for round_data in game_history[-3:]]
+
+            # Check if opponent is countering our moves
+            counter_pattern = 0
+            for i in range(len(recent_opponent_moves)):
+                if i < len(recent_ai_moves):
+                    ai_move = recent_ai_moves[i]
+                    opp_move = recent_opponent_moves[i]
+                    if opp_move in ["rock", "paper", "scissors"] and ai_move in ["rock", "paper", "scissors"]:
+                        counters = {"rock": "paper", "paper": "scissors", "scissors": "rock"}
+                        if opp_move == counters.get(ai_move):
+                            counter_pattern += 1
+
+            # If opponent is countering us, mix it up
+            if counter_pattern >= 2:
+                return random.choice(["rock", "paper", "scissors"])
+
+        # Standard counter-strategy with higher success rate
         counters = {
             "rock": "paper",
-            "paper": "scissors", 
+            "paper": "scissors",
             "scissors": "rock"
         }
-        
-        # 70% chance to counter, 30% random for unpredictability
-        if random.random() < 0.7:
+
+        # 80% chance to counter, 20% random for unpredictability
+        if random.random() < 0.8:
             return counters.get(opponent_last_move, random.choice(["rock", "paper", "scissors"]))
         else:
             return random.choice(["rock", "paper", "scissors"])
