@@ -31,7 +31,7 @@ const SinglePlayerGame = () => {
   const [gameFinished, setGameFinished] = useState(false);
   
   const onGestureDetected = useCallback((gesture: HandGesture) => {
-    if (isPlaying && gesture.confidence > 0.7) {
+    if (isPlaying && gesture.confidence > 0.8) {  // Increased from 0.7
       console.log('Gesture detected:', gesture);
       // Handle gesture detection during active game
     }
@@ -44,7 +44,7 @@ const SinglePlayerGame = () => {
     startDetection, 
     stopDetection, 
     captureGesture 
-  } = useWebcamGesture({ onGestureDetected, confidenceThreshold: 0.6 });
+  } = useWebcamGesture({ onGestureDetected, confidenceThreshold: 0.7 });  // Increased from 0.6
 
   // Auto-start first round when game starts
   useEffect(() => {

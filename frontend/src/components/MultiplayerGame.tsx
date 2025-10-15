@@ -20,6 +20,13 @@ const MultiplayerGame = () => {
   const [showResult, setShowResult] = useState(false);
   const [gameHistory, setGameHistory] = useState<any[]>([]);
 
+  // Gesture detection states
+  const [player1Gesture, setPlayer1Gesture] = useState<string | null>(null);
+  const [player2Gesture, setPlayer2Gesture] = useState<string | null>(null);
+  const [gestureDetectionActive, setGestureDetectionActive] = useState(false);
+  const [player1Confidence, setPlayer1Confidence] = useState<number>(0);
+  const [player2Confidence, setPlayer2Confidence] = useState<number>(0);
+
   // Camera initialization
   useEffect(() => {
     const initializeCameras = async () => {
@@ -61,9 +68,12 @@ const MultiplayerGame = () => {
     }
     
     setCountdown(null);
+    setGestureDetectionActive(true);
     
-    // Give players time to make gestures
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Give players time to make gestures (5 seconds)
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    setGestureDetectionActive(false);
     
     // Capture gestures from both cameras
     const p1Move = await captureGestureFromCamera(webcam1Ref.current, 'player1');
@@ -154,7 +164,14 @@ const MultiplayerGame = () => {
       const result = await response.json();
       console.log(`${player}: API result:`, result);
       
-      if (result.detected && result.confidence > 0.6) {
+      // Update confidence state
+      if (player === 'player1') {
+        setPlayer1Confidence(result.confidence || 0);
+      } else {
+        setPlayer2Confidence(result.confidence || 0);
+      }
+      
+      if (result.detected && result.confidence > 0.7) {
         console.log(`${player}: Gesture detected: ${result.gesture} (${result.confidence})`);
         return result.gesture;
       } else {
@@ -291,14 +308,23 @@ const MultiplayerGame = () => {
               </div>
               
               {/* Detection indicator */}
-              <div className="absolute top-2 right-2">
+              <div className="absolute top-2 right-2 flex items-center gap-2">
                 <motion.div
-                  animate={{ scale: isPlaying ? [1, 1.2, 1] : 1 }}
-                  transition={{ repeat: isPlaying ? Infinity : 0, duration: 1 }}
+                  animate={{ scale: gestureDetectionActive ? [1, 1.2, 1] : 1 }}
+                  transition={{ repeat: gestureDetectionActive ? Infinity : 0, duration: 1 }}
                   className={`w-3 h-3 rounded-full ${
-                    isPlaying ? 'bg-red-500' : 'bg-gray-400'
+                    gestureDetectionActive ? 'bg-red-500' : 'bg-gray-400'
                   }`}
                 />
+                {gestureDetectionActive && player1Confidence > 0 && (
+                  <div className={`px-2 py-1 rounded text-xs font-bold ${
+                    player1Confidence > 0.8 ? 'bg-green-500 text-white' :
+                    player1Confidence > 0.6 ? 'bg-yellow-500 text-black' :
+                    'bg-red-500 text-white'
+                  }`}>
+                    {Math.round(player1Confidence * 100)}%
+                  </div>
+                )}
               </div>
             </div>
             
@@ -348,14 +374,23 @@ const MultiplayerGame = () => {
               </div>
               
               {/* Detection indicator */}
-              <div className="absolute top-2 right-2">
+              <div className="absolute top-2 right-2 flex items-center gap-2">
                 <motion.div
-                  animate={{ scale: isPlaying ? [1, 1.2, 1] : 1 }}
-                  transition={{ repeat: isPlaying ? Infinity : 0, duration: 1 }}
+                  animate={{ scale: gestureDetectionActive ? [1, 1.2, 1] : 1 }}
+                  transition={{ repeat: gestureDetectionActive ? Infinity : 0, duration: 1 }}
                   className={`w-3 h-3 rounded-full ${
-                    isPlaying ? 'bg-red-500' : 'bg-gray-400'
+                    gestureDetectionActive ? 'bg-red-500' : 'bg-gray-400'
                   }`}
                 />
+                {gestureDetectionActive && player2Confidence > 0 && (
+                  <div className={`px-2 py-1 rounded text-xs font-bold ${
+                    player2Confidence > 0.8 ? 'bg-green-500 text-white' :
+                    player2Confidence > 0.6 ? 'bg-yellow-500 text-black' :
+                    'bg-red-500 text-white'
+                  }`}>
+                    {Math.round(player2Confidence * 100)}%
+                  </div>
+                )}
               </div>
             </div>
             
