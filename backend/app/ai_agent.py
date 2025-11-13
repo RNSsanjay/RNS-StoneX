@@ -72,7 +72,7 @@ class AIAgent:
         prev_move = None
         for move in valid_moves:
             move_counts[move] += 1
-            if prev_move:
+            if prev_move: 
                 transitions[prev_move][move] += 1
             prev_move = move
 
